@@ -7,6 +7,13 @@ from dotenv import load_dotenv
 from telebot.apihelper import ApiTelegramException
 
 from db import checkGroupExists, addToDB, close_db, checkUserExists, checkOrganizerByUserID, getGroupNameByUserID, getNamesByGroup, getNameIdByName, addWishListByUserID, getWishListByName, deleteRecordsByGroupName, checkUserExistsInGroup, getOrganizerGroup
+import uvicorn
+from fastapi import FastAPI
+
+app = FastAPI()
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 load_dotenv()
 token = os.getenv('token')
