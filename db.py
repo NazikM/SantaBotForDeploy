@@ -1,94 +1,100 @@
-import sqlite3
 import random
-con = sqlite3.connect("santaBot.db", check_same_thread=False)
-cur = con.cursor()
-cur.execute("CREATE TABLE IF NOT EXISTS santaBot(id INTEGER PRIMARY KEY AUTOINCREMENT, group_name TEXT, name TEXT, name_id TEXT, organizer BOOLEAN, wish_list TEXT)")
 
+import os
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
+# Configure database connection
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# Define the santaBot table as a model
+class SantaBot(Base):
+    __tablename__ = "santaBot"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    group_name = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    name_id = Column(String, nullable=False)
+    organizer = Column(Boolean, nullable=False)
+    wish_list = Column(Text)
+
+# Create the table if it doesn't exist
+Base.metadata.create_all(bind=engine)
+
+# Database session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Functions
 def addToDB(group_name, name, name_id, organizer):
-    cur.execute("INSERT INTO santaBot (group_name, name, name_id, organizer) VALUES (?, ?, ?, ?)", (group_name, name, name_id, organizer))
-    con.commit()
-
+    db = next(get_db())
+    new_entry = SantaBot(group_name=group_name, name=name, name_id=name_id, organizer=organizer)
+    db.add(new_entry)
+    db.commit()
 
 def checkGroupExists(group_name):
-    cur.execute("SELECT 1 FROM santaBot WHERE group_name = ?", (group_name,))
-    result = cur.fetchone()
+    db = next(get_db())
+    result = db.query(SantaBot).filter(SantaBot.group_name == group_name).first()
     return result is not None
-
 
 def checkUserExists(name_id):
-    cur.execute("SELECT 1 FROM santaBot WHERE name_id = ?", (name_id,))
-    result = cur.fetchone()
+    db = next(get_db())
+    result = db.query(SantaBot).filter(SantaBot.name_id == name_id).first()
     return result is not None
-
 
 def checkUserExistsInGroup(name_id, group_name):
-    cur.execute("SELECT 1 FROM santaBot WHERE name_id = ? AND group_name = ?", (name_id, group_name))
-    result = cur.fetchone()
+    db = next(get_db())
+    result = db.query(SantaBot).filter(SantaBot.name_id == name_id, SantaBot.group_name == group_name).first()
     return result is not None
-
 
 def checkOrganizerByUserID(name_id):
-    cur.execute("SELECT organizer FROM santaBot WHERE name_id = ? AND organizer = 1", (name_id,))
-    result = cur.fetchone()
+    db = next(get_db())
+    result = db.query(SantaBot).filter(SantaBot.name_id == name_id, SantaBot.organizer.is_(True)).first()
     return result is not None
 
-
 def getGroupNameByUserID(name_id):
-    cur.execute("SELECT group_name FROM santaBot WHERE name_id = ?", (name_id,))
-    result = cur.fetchone()
-    if result is not None:
-        return result[0]  # Повертаємо перший стовпець (group_name)
-    else:
-        return None  # Якщо запис не знайдено, повертаємо None
-
+    db = next(get_db())
+    result = db.query(SantaBot.group_name).filter(SantaBot.name_id == name_id).first()
+    return result.group_name if result else None
 
 def getNamesByGroup(group_name):
-    cur.execute("SELECT name FROM santaBot WHERE group_name = ?", (group_name,))
-    results = cur.fetchall()
-    user_names = [name[0] for name in results]
-    return user_names
-
+    db = next(get_db())
+    results = db.query(SantaBot.name).filter(SantaBot.group_name == group_name).all()
+    return [name.name for name in results]
 
 def getNameIdByName(name, group_name):
-    cur.execute("SELECT name_id FROM santaBot WHERE name = ? AND group_name = ?", (name, group_name))
-    result = cur.fetchone()
-    if result:
-        return result[0]
-    else:
-        return None
-
+    db = next(get_db())
+    result = db.query(SantaBot.name_id).filter(SantaBot.name == name, SantaBot.group_name == group_name).first()
+    return result.name_id if result else None
 
 def getOrganizerGroup(group_name):
-    cur.execute("SELECT name_id FROM santaBot WHERE group_name = ? AND organizer = 1", (group_name,))
-    result = cur.fetchone()
-    if result:
-        return result[0]
-    else:
-        return None
-
-
+    db = next(get_db())
+    result = db.query(SantaBot.name_id).filter(SantaBot.group_name == group_name, SantaBot.organizer.is_(True)).first()
+    return result.name_id if result else None
 
 def addWishListByUserID(name_id, wish_list):
-    cur.execute("UPDATE santaBot SET wish_list = ? WHERE name_id = ?", (wish_list, name_id))
-    con.commit()
-
+    db = next(get_db())
+    db.query(SantaBot).filter(SantaBot.name_id == name_id).update({"wish_list": wish_list})
+    db.commit()
 
 def getWishListByName(name, group_name):
-    cur.execute("SELECT wish_list FROM santaBot WHERE name = ? AND group_name = ?", (name, group_name))
-    result = cur.fetchone()
-    print(result)
-    if result and result[0]:
-        return result[0]  # Повертаємо значення поля `wish_list`
-    else:
-        return "Я чекаю щось чудове, я тобі довіряю🤗"
-
+    db = next(get_db())
+    result = db.query(SantaBot.wish_list).filter(SantaBot.name == name, SantaBot.group_name == group_name).first()
+    if result and result.wish_list:
+        return result.wish_list
+    return "Я чекаю щось чудове, я тобі довіряю🤗"
 
 def deleteRecordsByGroupName(group_name):
-    cur.execute("DELETE FROM santaBot WHERE group_name = ?", (group_name,))
-    con.commit()
-
+    db = next(get_db())
+    db.query(SantaBot).filter(SantaBot.group_name == group_name).delete()
+    db.commit()
 
 def close_db():
-    cur.close()
-    con.close()
+    pass  # Not needed for SQLAlchemy as sessions are handled with `get_db()`
